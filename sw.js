@@ -1,13 +1,19 @@
-const CACHE_NAME = "fe-trainer-v4";
+importScripts("./data/ipa-assets.js");
+
+const CACHE_NAME = "fe-trainer-v8";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
   "./data/questions.js",
+  "./data/ipa-questions.js",
+  "./data/ipa-assets.js",
+  "./data/simulated-questions.js",
   "./manifest.webmanifest",
   "./icons/icon-192.png",
-  "./icons/icon-512.png"
+  "./icons/icon-512.png",
+  ...(self.IPA_QUESTION_ASSETS || [])
 ];
 
 self.addEventListener("install", (event) => {

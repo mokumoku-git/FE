@@ -220,7 +220,12 @@ function mergeQuestionBank(...sets) {
 }
 
 let importedQuestions = loadJson(IMPORT_KEY, []);
-let questions = mergeQuestionBank(window.FE_QUESTIONS, importedQuestions);
+let questions = mergeQuestionBank(
+  window.IPA_FE_QUESTIONS || [],
+  window.FE_SIMULATED_QUESTIONS || [],
+  window.FE_QUESTIONS,
+  importedQuestions
+);
 let state = loadJson(STORE_KEY, {
   answers: {},
   wrong: {},
@@ -299,8 +304,16 @@ function displayOption(option) {
 }
 
 function questionYearLabel(q) {
+  if (q.year === "Simulation") return "模拟题 · 真题同等难度";
   if (!q.year || q.year === "Practice" || q.year === "Imported") return "年份：练习题（非真题）";
   return `年份：${q.year} · 来源：${q.source}`;
+}
+
+function answerLabel(q, index) {
+  const option = q.options[index];
+  if (q.source === "IPA公式公開問題") return option;
+  if (q.year === "Simulation") return ["ア", "イ", "ウ", "エ"][index];
+  return String.fromCharCode(65 + index);
 }
 
 function renderPractice() {
@@ -309,9 +322,10 @@ function renderPractice() {
   const stage = state.currentStage;
   $("stageTitle").textContent = state.activeSet === "wrong" ? "错题复习" : `${stage.section.replace("科目", "科目 ")} · 第 ${stage.number} 关`;
   $("emptyPractice").classList.toggle("hidden", Boolean(q));
-  ["questionIndex", "questionTag", "questionTitle", "questionText", "optionList", "feedback"].forEach((id) => {
+  ["questionIndex", "questionTag", "questionTitle", "questionText", "questionImages", "optionList", "feedback"].forEach((id) => {
     $(id).classList.toggle("hidden", !q);
   });
+  $("sourceLink").classList.add("hidden");
   $("resetAnswerBtn").disabled = !q;
   $("prevBtn").disabled = !q || state.currentIndex === 0;
   $("nextBtn").disabled = !q || state.currentIndex >= set.length - 1;
@@ -324,6 +338,13 @@ function renderPractice() {
   $("questionTag").textContent = `${q.section} · ${q.category} · ${questionYearLabel(q)}`;
   $("questionTitle").textContent = displayTitle(q);
   $("questionText").textContent = displayQuestion(q);
+  $("questionText").classList.toggle("hidden", Boolean(q.image));
+  $("questionImages").innerHTML = q.image ? `<img src="${q.image}" alt="${displayTitle(q)} IPA公式問題">` : "";
+  $("questionImages").classList.toggle("hidden", !q.image);
+  if (q.sourceUrl) {
+    $("sourceLink").href = q.sourceUrl;
+    $("sourceLink").classList.remove("hidden");
+  }
   $("optionList").innerHTML = "";
 
   q.options.forEach((option, index) => {
@@ -332,7 +353,9 @@ function renderPractice() {
     if (record.selected === index) button.classList.add("selected");
     if (record.selected !== null && index === q.answer) button.classList.add("correct");
     if (record.selected === index && index !== q.answer) button.classList.add("wrong");
-    button.innerHTML = `<span class="option-key">${String.fromCharCode(65 + index)}</span><span>${displayOption(option)}</span>`;
+    const key = answerLabel(q, index);
+    const copy = q.source === "IPA公式公開問題" ? `選択肢 ${key}` : displayOption(option);
+    button.innerHTML = `<span class="option-key">${key}</span><span>${copy}</span>`;
     button.addEventListener("click", () => answerQuestion(q, index));
     $("optionList").appendChild(button);
   });
@@ -343,7 +366,7 @@ function renderPractice() {
   } else {
     const ok = record.selected === q.answer;
     $("feedback").className = `feedback ${ok ? "good" : "bad"}`;
-    $("feedback").textContent = `${ok ? "正解" : "不正解"}。答案：${String.fromCharCode(65 + q.answer)}。中文解释：${q.explanation}`;
+    $("feedback").textContent = `${ok ? "正解" : "不正解"}。答案：${answerLabel(q, q.answer)}。中文解释：${q.explanation}`;
   }
 
   $("currentAccuracy").textContent = record.attempts ? `${Math.round((record.correct / record.attempts) * 100)}%` : "-";
@@ -536,10 +559,10 @@ function buildPrompt(q) {
 ${displayQuestion(q)}
 
 選択肢:
-${q.options.map((o, i) => `${String.fromCharCode(65 + i)}. ${displayOption(o)}`).join("\n")}
+${q.options.map((o, i) => `${answerLabel(q, i)}. ${displayOption(o)}`).join("\n")}
 
-正确答案: ${String.fromCharCode(65 + q.answer)}
-我的选择: ${selected == null ? "未选择" : String.fromCharCode(65 + selected)}
+正确答案: ${answerLabel(q, q.answer)}
+我的选择: ${selected == null ? "未选择" : answerLabel(q, selected)}
 已有简要解释: ${q.explanation}`;
 }
 
@@ -715,7 +738,12 @@ async function importQuestions(event) {
     }
     importedQuestions = mergeQuestionBank(importedQuestions, normalized);
     localStorage.setItem(IMPORT_KEY, JSON.stringify(importedQuestions));
-    questions = mergeQuestionBank(window.FE_QUESTIONS, importedQuestions);
+    questions = mergeQuestionBank(
+      window.IPA_FE_QUESTIONS || [],
+      window.FE_SIMULATED_QUESTIONS || [],
+      window.FE_QUESTIONS,
+      importedQuestions
+    );
     renderAll();
   } catch (error) {
     alert(`导入失败：${error.message}`);

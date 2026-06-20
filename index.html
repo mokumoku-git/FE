@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="zh-Hans">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#111820" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="FE Trainer" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>FE Daily Trainer</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+    <link rel="icon" href="icons/icon-192.png" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">FE</div>
+          <div>
+            <h1>基本情報</h1>
+            <p>每日 30 题</p>
+          </div>
+        </div>
+
+        <nav class="nav" aria-label="Main navigation">
+          <button class="nav-item active" data-view="practice">
+            <span class="nav-desktop">练习 / 練習</span>
+            <span class="nav-mobile">練習</span>
+          </button>
+          <button class="nav-item" data-view="wrong">
+            <span class="nav-desktop">错题 / 間違い</span>
+            <span class="nav-mobile">错题</span>
+          </button>
+          <button class="nav-item" data-view="stats">
+            <span class="nav-desktop">统计 / 統計</span>
+            <span class="nav-mobile">统计</span>
+          </button>
+          <button class="nav-item" data-view="library">
+            <span class="nav-desktop">题库 / 問題集</span>
+            <span class="nav-mobile">题库</span>
+          </button>
+          <button class="nav-item" data-view="settings">
+            <span class="nav-desktop">设置 / 設定</span>
+            <span class="nav-mobile">设置</span>
+          </button>
+        </nav>
+
+        <div class="mini-card">
+          <span class="label">今日进度</span>
+          <strong id="todayProgress">0 / 30</strong>
+          <div class="meter"><span id="todayMeter"></span></div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <section id="practice" class="view active">
+          <header class="topbar">
+            <div>
+              <p class="eyebrow">Daily practice / 今日の練習</p>
+              <h2>今天 30 道，稳稳推进</h2>
+            </div>
+            <div class="toolbar">
+              <button id="newDailyBtn" class="secondary">重新生成今日题</button>
+              <button id="resetAnswerBtn" class="secondary">重做本题</button>
+            </div>
+          </header>
+
+          <div class="practice-layout">
+            <article class="question-panel">
+              <div class="question-meta">
+                <span id="questionIndex">第 1 / 30 题</span>
+                <span id="questionTag">科目A</span>
+              </div>
+              <h3 id="questionTitle"></h3>
+              <p id="questionText" class="question-text"></p>
+              <div id="optionList" class="options"></div>
+
+              <div id="feedback" class="feedback hidden"></div>
+
+              <div class="actions">
+                <button id="prevBtn" class="secondary">上一题</button>
+                <button id="nextBtn">下一题</button>
+              </div>
+            </article>
+
+            <aside class="side-panel">
+              <div class="panel-section">
+                <h3>AI 解释</h3>
+                <p class="muted">可用本地保存的 OpenAI API Key 生成中文和日语解释；没有 Key 时可复制提示词。</p>
+                <button id="aiExplainBtn">生成解释</button>
+                <button id="copyPromptBtn" class="secondary">复制提示词</button>
+                <div id="aiOutput" class="ai-output"></div>
+              </div>
+              <div class="panel-section">
+                <h3>本题记录</h3>
+                <dl class="compact-stats">
+                  <div><dt>正确率</dt><dd id="currentAccuracy">-</dd></div>
+                  <div><dt>复习次数</dt><dd id="currentAttempts">0</dd></div>
+                  <div><dt>状态</dt><dd id="currentState">未作答</dd></div>
+                </dl>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section id="wrong" class="view">
+          <header class="topbar">
+            <div>
+              <p class="eyebrow">Review / 復習</p>
+              <h2>错题本</h2>
+            </div>
+            <button id="startWrongBtn">只练错题</button>
+          </header>
+          <div id="wrongList" class="list"></div>
+        </section>
+
+        <section id="stats" class="view">
+          <header class="topbar">
+            <div>
+              <p class="eyebrow">Progress / 進捗</p>
+              <h2>学习统计</h2>
+            </div>
+            <button id="exportBtn" class="secondary">导出数据</button>
+          </header>
+          <div class="stat-grid">
+            <div class="stat-card"><span>总作答</span><strong id="totalAnswers">0</strong></div>
+            <div class="stat-card"><span>正确率</span><strong id="overallAccuracy">0%</strong></div>
+            <div class="stat-card"><span>连续学习</span><strong id="streakDays">0 天</strong></div>
+            <div class="stat-card"><span>错题数</span><strong id="wrongCount">0</strong></div>
+          </div>
+          <div class="chart-wrap">
+            <h3>最近 14 天</h3>
+            <div id="dailyChart" class="bar-chart"></div>
+          </div>
+          <div class="chart-wrap">
+            <h3>分类掌握</h3>
+            <div id="categoryStats" class="category-list"></div>
+          </div>
+        </section>
+
+        <section id="library" class="view">
+          <header class="topbar">
+            <div>
+              <p class="eyebrow">Question bank / 問題集</p>
+              <h2>题库管理</h2>
+            </div>
+            <label class="file-button">
+              导入 JSON
+              <input id="importFile" type="file" accept="application/json" />
+            </label>
+          </header>
+          <div class="notice">
+            内置题是同等难度练习题。IPA 官方公开题可从 README 中的官方链接下载后整理成 JSON 导入。
+          </div>
+          <div id="libraryList" class="list"></div>
+        </section>
+
+        <section id="settings" class="view">
+          <header class="topbar">
+            <div>
+              <p class="eyebrow">Settings / 設定</p>
+              <h2>本地设置</h2>
+            </div>
+          </header>
+          <div class="settings-grid">
+            <label>
+              OpenAI API Key
+              <input id="apiKeyInput" type="password" placeholder="sk-..." autocomplete="off" />
+            </label>
+            <label>
+              AI 模型
+              <input id="modelInput" type="text" value="gpt-4.1-mini" />
+            </label>
+            <label>
+              每日题数
+              <input id="dailyCountInput" type="number" min="5" max="80" value="30" />
+            </label>
+            <button id="saveSettingsBtn">保存设置</button>
+            <button id="installAppBtn" class="secondary hidden" type="button">安装到手机</button>
+            <button id="clearDataBtn" class="danger">清空学习数据</button>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="data/questions.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -1,7 +1,7 @@
 {
-  "name": "FE Daily Trainer",
+  "name": "FE 60关训练",
   "short_name": "FE Trainer",
-  "description": "日本基本情報技術者試験 FE 每日练习工具",
+  "description": "日本基本情報技術者試験 FE 60关练习工具",
   "lang": "zh-Hans",
   "start_url": "./index.html",
   "scope": "./",

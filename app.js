@@ -3,12 +3,17 @@ const SETTINGS_KEY = "fe-trainer-settings-v1";
 const IMPORT_KEY = "fe-trainer-imported-v1";
 
 const $ = (id) => document.getElementById(id);
-const todayKey = () => new Date().toISOString().slice(0, 10);
+const localDateKey = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+const todayKey = () => localDateKey();
 
 const defaultSettings = {
   apiKey: "",
-  model: "gpt-4.1-mini",
-  dailyCount: 30
+  model: "gpt-4.1-mini"
 };
 
 const JA_TEXT = {
@@ -205,16 +210,29 @@ const JA_TEXT = {
   "缩短密码": "パスワードを短くする"
 };
 
+function mergeQuestionBank(...sets) {
+  const seen = new Set();
+  return sets.flat().filter((q) => {
+    if (!q?.id || seen.has(q.id)) return false;
+    seen.add(q.id);
+    return true;
+  });
+}
+
 let importedQuestions = loadJson(IMPORT_KEY, []);
-let questions = [...window.FE_QUESTIONS, ...importedQuestions];
+let questions = mergeQuestionBank(window.FE_QUESTIONS, importedQuestions);
 let state = loadJson(STORE_KEY, {
-  daily: {},
   answers: {},
   wrong: {},
   sessions: {},
   currentIndex: 0,
-  activeSet: "daily"
+  activeSet: "stage",
+  currentStage: { section: "科目A", number: 1 },
+  selectedSubject: "科目A"
 });
+state.currentStage = state.currentStage || { section: "科目A", number: 1 };
+state.selectedSubject = state.selectedSubject || "科目A";
+if (state.activeSet === "daily") state.activeSet = "stage";
 let settings = { ...defaultSettings, ...loadJson(SETTINGS_KEY, {}) };
 let deferredInstallPrompt = null;
 
@@ -234,31 +252,25 @@ function saveSettings() {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 }
 
-function shuffle(items, seed) {
-  const output = [...items];
-  let value = seed.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0) || 1;
-  for (let i = output.length - 1; i > 0; i--) {
-    value = (value * 9301 + 49297) % 233280;
-    const j = Math.floor((value / 233280) * (i + 1));
-    [output[i], output[j]] = [output[j], output[i]];
-  }
-  return output;
+function sectionQuestions(section) {
+  return questions.filter((q) => q.section.replace(/\s/g, "") === section);
 }
 
-function ensureDaily(force = false) {
-  const key = todayKey();
-  if (!state.daily[key] || force) {
-    const count = Math.min(settings.dailyCount, questions.length);
-    state.daily[key] = shuffle(questions, `${key}-${Date.now()}`).slice(0, count).map((q) => q.id);
-    state.currentIndex = 0;
-    state.activeSet = "daily";
-    saveState();
-  }
+function stageQuestions(section, number) {
+  const start = (number - 1) * 30;
+  return sectionQuestions(section).slice(start, start + 30);
+}
+
+function stageProgress(section, number) {
+  const set = stageQuestions(section, number);
+  const done = set.filter((q) => state.answers[q.id]?.selected != null).length;
+  return { count: set.length, done, percent: set.length ? Math.round((done / 30) * 100) : 0 };
 }
 
 function activeIds() {
   if (state.activeSet === "wrong") return Object.keys(state.wrong);
-  return state.daily[todayKey()] || [];
+  const stage = state.currentStage;
+  return stageQuestions(stage.section, stage.number).map((q) => q.id);
 }
 
 function activeQuestions() {
@@ -286,14 +298,30 @@ function displayOption(option) {
   return option;
 }
 
+function questionYearLabel(q) {
+  if (!q.year || q.year === "Practice" || q.year === "Imported") return "年份：练习题（非真题）";
+  return `年份：${q.year} · 来源：${q.source}`;
+}
+
 function renderPractice() {
-  ensureDaily();
   const set = activeQuestions();
   const q = currentQuestion();
-  if (!q) return;
+  const stage = state.currentStage;
+  $("stageTitle").textContent = state.activeSet === "wrong" ? "错题复习" : `${stage.section.replace("科目", "科目 ")} · 第 ${stage.number} 关`;
+  $("emptyPractice").classList.toggle("hidden", Boolean(q));
+  ["questionIndex", "questionTag", "questionTitle", "questionText", "optionList", "feedback"].forEach((id) => {
+    $(id).classList.toggle("hidden", !q);
+  });
+  $("resetAnswerBtn").disabled = !q;
+  $("prevBtn").disabled = !q || state.currentIndex === 0;
+  $("nextBtn").disabled = !q || state.currentIndex >= set.length - 1;
+  if (!q) {
+    $("aiOutput").textContent = "";
+    return;
+  }
   const record = state.answers[q.id] || { attempts: 0, correct: 0, selected: null };
   $("questionIndex").textContent = `第 ${state.currentIndex + 1} / ${set.length} 题`;
-  $("questionTag").textContent = `${q.section} · ${q.category} · ${q.source}`;
+  $("questionTag").textContent = `${q.section} · ${q.category} · ${questionYearLabel(q)}`;
   $("questionTitle").textContent = displayTitle(q);
   $("questionText").textContent = displayQuestion(q);
   $("optionList").innerHTML = "";
@@ -322,7 +350,7 @@ function renderPractice() {
   $("currentAttempts").textContent = record.attempts || 0;
   $("currentState").textContent = record.selected == null ? "未作答" : record.selected === q.answer ? "已掌握" : "需复习";
   $("aiOutput").textContent = "";
-  renderProgress();
+  renderLevelProgress();
 }
 
 function answerQuestion(q, index) {
@@ -344,11 +372,47 @@ function answerQuestion(q, index) {
   renderAll();
 }
 
-function renderProgress() {
-  const ids = state.daily[todayKey()] || [];
-  const done = ids.filter((id) => state.answers[id]?.selected !== null && state.answers[id]?.selected !== undefined).length;
-  $("todayProgress").textContent = `${done} / ${ids.length || settings.dailyCount}`;
-  $("todayMeter").style.width = `${ids.length ? (done / ids.length) * 100 : 0}%`;
+function renderLevelProgress() {
+  const assigned = ["科目A", "科目B"].flatMap((section) => sectionQuestions(section).slice(0, 900));
+  const done = assigned.filter((q) => state.answers[q.id]?.selected != null).length;
+  const percent = Math.round((done / 1800) * 100);
+  $("overallProgress").textContent = `${percent}%`;
+  $("overallMeter").style.width = `${percent}%`;
+}
+
+function renderLevels() {
+  document.querySelectorAll(".subject-tab").forEach((tab) => {
+    const active = tab.dataset.section === state.selectedSubject;
+    tab.classList.toggle("active", active);
+    tab.classList.toggle("secondary", !active);
+    tab.setAttribute("aria-selected", String(active));
+  });
+
+  const available = sectionQuestions(state.selectedSubject).length;
+  $("bankNotice").textContent = `当前题库：${available} / 900 题。每题只属于一个关卡，关卡之间不会重复。`;
+  $("levelGrid").innerHTML = "";
+  for (let number = 1; number <= 30; number += 1) {
+    const progress = stageProgress(state.selectedSubject, number);
+    const card = document.createElement("button");
+    card.className = "level-card";
+    card.innerHTML = `
+      <span class="level-number">${number}</span>
+      <span class="level-copy"><strong>第 ${number} 关</strong><small>${progress.count} / 30 题</small></span>
+      <span class="level-percent">${progress.percent}%</span>
+      <span class="level-meter"><i style="width:${progress.percent}%"></i></span>
+    `;
+    card.addEventListener("click", () => openStage(state.selectedSubject, number));
+    $("levelGrid").appendChild(card);
+  }
+  renderLevelProgress();
+}
+
+function openStage(section, number) {
+  state.currentStage = { section, number };
+  state.activeSet = "stage";
+  state.currentIndex = 0;
+  saveState();
+  switchView("practice");
 }
 
 function renderWrong() {
@@ -373,11 +437,16 @@ function questionListItem(q) {
       <span class="pill">${q.category}</span>
       <span class="pill">${q.section}</span>
       <span class="pill">正确率 ${accuracy}%</span>
-      <span class="pill">${q.source}</span>
+      <span class="pill">${questionYearLabel(q)}</span>
     </div>
   `;
   item.addEventListener("click", () => {
-    state.activeSet = Object.keys(state.wrong).includes(q.id) ? "wrong" : "daily";
+    state.activeSet = Object.keys(state.wrong).includes(q.id) ? "wrong" : "stage";
+    if (state.activeSet === "stage") {
+      const section = q.section.replace(/\s/g, "");
+      const position = sectionQuestions(section).findIndex((item) => item.id === q.id);
+      state.currentStage = { section, number: Math.floor(position / 30) + 1 };
+    }
     const index = activeIds().indexOf(q.id);
     state.currentIndex = Math.max(0, index);
     saveState();
@@ -402,7 +471,7 @@ function calcStreak() {
   let streak = 0;
   const date = new Date();
   while (true) {
-    const key = date.toISOString().slice(0, 10);
+    const key = localDateKey(date);
     if (!state.sessions[key]?.answered) break;
     streak += 1;
     date.setDate(date.getDate() - 1);
@@ -416,7 +485,7 @@ function renderDailyChart() {
   for (let i = 13; i >= 0; i--) {
     const date = new Date();
     date.setDate(date.getDate() - i);
-    dates.push(date.toISOString().slice(0, 10));
+    dates.push(localDateKey(date));
   }
   const max = Math.max(1, ...dates.map((d) => state.sessions[d]?.answered || 0));
   dates.forEach((date) => {
@@ -512,17 +581,19 @@ async function copyPrompt() {
 
 function switchView(viewId) {
   document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === viewId));
-  document.querySelectorAll(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.view === viewId));
+  document.querySelectorAll(".nav-item").forEach((item) => {
+    item.classList.toggle("active", item.dataset.view === viewId || (viewId === "practice" && item.dataset.view === "levels"));
+  });
   renderAll();
 }
 
 function renderSettings() {
   $("apiKeyInput").value = settings.apiKey;
   $("modelInput").value = settings.model;
-  $("dailyCountInput").value = settings.dailyCount;
 }
 
 function renderAll() {
+  renderLevels();
   renderPractice();
   renderWrong();
   renderStats();
@@ -532,10 +603,12 @@ function renderAll() {
 
 function bindEvents() {
   document.querySelectorAll(".nav-item").forEach((item) => item.addEventListener("click", () => switchView(item.dataset.view)));
-  $("newDailyBtn").addEventListener("click", () => {
-    ensureDaily(true);
-    renderAll();
-  });
+  document.querySelectorAll(".subject-tab").forEach((tab) => tab.addEventListener("click", () => {
+    state.selectedSubject = tab.dataset.section;
+    saveState();
+    renderLevels();
+  }));
+  $("backToLevelsBtn").addEventListener("click", () => switchView("levels"));
   $("resetAnswerBtn").addEventListener("click", () => {
     const q = currentQuestion();
     if (!q) return;
@@ -564,19 +637,19 @@ function bindEvents() {
   $("saveSettingsBtn").addEventListener("click", () => {
     settings = {
       apiKey: $("apiKeyInput").value.trim(),
-      model: $("modelInput").value.trim() || defaultSettings.model,
-      dailyCount: Number($("dailyCountInput").value) || 30
+      model: $("modelInput").value.trim() || defaultSettings.model
     };
     saveSettings();
-    ensureDaily(true);
     renderAll();
   });
   $("installAppBtn").addEventListener("click", installApp);
   $("clearDataBtn").addEventListener("click", () => {
     if (!confirm("确定清空学习记录吗？题库和设置会保留。")) return;
-    state = { daily: {}, answers: {}, wrong: {}, sessions: {}, currentIndex: 0, activeSet: "daily" };
+    state = {
+      answers: {}, wrong: {}, sessions: {}, currentIndex: 0, activeSet: "stage",
+      currentStage: { section: "科目A", number: 1 }, selectedSubject: "科目A"
+    };
     saveState();
-    ensureDaily(true);
     renderAll();
   });
   $("exportBtn").addEventListener("click", () => {
@@ -640,10 +713,9 @@ async function importQuestions(event) {
     if (normalized.some((q) => !q.text || !Array.isArray(q.options) || typeof q.answer !== "number")) {
       throw new Error("每题需要 text、options 数组、answer 数字。");
     }
-    importedQuestions = [...importedQuestions, ...normalized];
+    importedQuestions = mergeQuestionBank(importedQuestions, normalized);
     localStorage.setItem(IMPORT_KEY, JSON.stringify(importedQuestions));
-    questions = [...window.FE_QUESTIONS, ...importedQuestions];
-    ensureDaily(true);
+    questions = mergeQuestionBank(window.FE_QUESTIONS, importedQuestions);
     renderAll();
   } catch (error) {
     alert(`导入失败：${error.message}`);
@@ -654,5 +726,4 @@ async function importQuestions(event) {
 
 bindEvents();
 setupPwa();
-ensureDaily();
 renderAll();

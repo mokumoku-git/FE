@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="FE Trainer" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <title>FE Daily Trainer</title>
+    <title>FE 60关训练</title>
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="apple-touch-icon" href="icons/icon-192.png" />
     <link rel="icon" href="icons/icon-192.png" />
@@ -21,14 +21,14 @@
           <div class="brand-mark">FE</div>
           <div>
             <h1>基本情報</h1>
-            <p>每日 30 题</p>
+            <p>60关训练</p>
           </div>
         </div>
 
         <nav class="nav" aria-label="Main navigation">
-          <button class="nav-item active" data-view="practice">
-            <span class="nav-desktop">练习 / 練習</span>
-            <span class="nav-mobile">練習</span>
+          <button class="nav-item active" data-view="levels">
+            <span class="nav-desktop">闯关 / ステージ</span>
+            <span class="nav-mobile">闯关</span>
           </button>
           <button class="nav-item" data-view="wrong">
             <span class="nav-desktop">错题 / 間違い</span>
@@ -49,30 +49,46 @@
         </nav>
 
         <div class="mini-card">
-          <span class="label">今日进度</span>
-          <strong id="todayProgress">0 / 30</strong>
-          <div class="meter"><span id="todayMeter"></span></div>
+          <span class="label">总进度</span>
+          <strong id="overallProgress">0%</strong>
+          <div class="meter"><span id="overallMeter"></span></div>
         </div>
       </aside>
 
       <main class="main">
-        <section id="practice" class="view active">
+        <section id="levels" class="view active">
           <header class="topbar">
             <div>
-              <p class="eyebrow">Daily practice / 今日の練習</p>
-              <h2>今天 30 道，稳稳推进</h2>
+              <p class="eyebrow">60 stages / 60ステージ</p>
+              <h2>选择关卡</h2>
+            </div>
+          </header>
+          <div class="subject-tabs" role="tablist" aria-label="科目选择">
+            <button class="subject-tab active" data-section="科目A" role="tab">科目 A · 30关</button>
+            <button class="subject-tab secondary" data-section="科目B" role="tab">科目 B · 30关</button>
+          </div>
+          <div id="bankNotice" class="notice"></div>
+          <div id="levelGrid" class="level-grid"></div>
+        </section>
+
+        <section id="practice" class="view">
+          <header class="topbar">
+            <div>
+              <p id="stageEyebrow" class="eyebrow">Stage practice / ステージ練習</p>
+              <h2 id="stageTitle">科目 A · 第 1 关</h2>
             </div>
             <div class="toolbar">
-              <button id="newDailyBtn" class="secondary">重新生成今日题</button>
+              <button id="backToLevelsBtn" class="secondary">返回关卡</button>
               <button id="resetAnswerBtn" class="secondary">重做本题</button>
             </div>
           </header>
 
           <div class="practice-layout">
             <article class="question-panel">
+              <div id="emptyPractice" class="notice hidden">此关题库尚未补齐，请先在题库页面导入题目。</div>
               <div class="question-meta">
                 <span id="questionIndex">第 1 / 30 题</span>
-                <span id="questionTag">科目A</span>
+                <span id="questionTag">科目A · 真题年份</span>
               </div>
               <h3 id="questionTitle"></h3>
               <p id="questionText" class="question-text"></p>
@@ -173,10 +189,6 @@
             <label>
               AI 模型
               <input id="modelInput" type="text" value="gpt-4.1-mini" />
-            </label>
-            <label>
-              每日题数
-              <input id="dailyCountInput" type="number" min="5" max="80" value="30" />
             </label>
             <button id="saveSettingsBtn">保存设置</button>
             <button id="installAppBtn" class="secondary hidden" type="button">安装到手机</button>
